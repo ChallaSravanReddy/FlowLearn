@@ -1,5 +1,6 @@
 import { type Node, type Edge } from 'reactflow';
 import { type NodeProperties } from '../types/node';
+import { type Lesson } from '../types/lesson';
 
 export interface Template {
     id: string;
@@ -8,6 +9,7 @@ export interface Template {
     difficulty: 'beginner' | 'intermediate' | 'advanced';
     nodes: Node<NodeProperties>[];
     edges: Edge[];
+    lessons?: Lesson[];
 }
 
 export const templates: Template[] = [
@@ -24,6 +26,26 @@ export const templates: Template[] = [
         edges: [
             { id: 'e1-1', source: 't1-1', target: 't1-2', animated: true },
             { id: 'e1-2', source: 't1-2', target: 't1-3', animated: true },
+        ],
+        lessons: [
+            {
+                id: 'l1-1',
+                title: 'The Request Lifecycle',
+                content: 'Welcome! This simple flow demonstrates how a user request travels through a backend system.\n\n **Click Play** to see a packet leave the **Mobile App** and head towards the API.',
+                highlightNodeIds: ['t1-1']
+            },
+            {
+                id: 'l1-2',
+                title: 'API Processing',
+                content: 'The **REST API** receives the request. In a real system, this might be an Express or Django server.\n\nNotice the slight delay? That represents processing time (e.g., parsing JSON, validating auth).',
+                highlightNodeIds: ['t1-2']
+            },
+            {
+                id: 'l1-3',
+                title: 'Database Query',
+                content: 'Finally, the API queries the **Main DB** to get data.\n\nDatabases are often the slowest part of a request. Try increasing the DB latency to see how it affects the total time!',
+                highlightNodeIds: ['t1-3']
+            }
         ]
     },
     {
@@ -41,6 +63,20 @@ export const templates: Template[] = [
             { id: 'e2-1', source: 't2-1', target: 't2-2', animated: true },
             { id: 'e2-2', source: 't2-2', target: 't2-3', animated: true },
             { id: 'e2-3', source: 't2-2', target: 't2-4', animated: true },
+        ],
+        lessons: [
+            {
+                id: 'l2-1',
+                title: 'Introduction to Caching',
+                content: 'Caching is a technique to speed up responses by storing frequently accessed data in fast memory (like Redis).\n\nIn this flow, we have a **Redis Cache** (fast) and a **SQL Database** (slow).',
+                highlightNodeIds: ['t2-3', 't2-4']
+            },
+            {
+                id: 'l2-2',
+                title: 'Cache Hit vs Miss',
+                content: '**Cache Hit**: If data is in Redis, the API returns it immediately (super fast!).\n\n**Cache Miss**: If not, the API must query the slow SQL Database, then save the result to Redis for next time.',
+                highlightNodeIds: ['t2-3']
+            }
         ]
     },
     {

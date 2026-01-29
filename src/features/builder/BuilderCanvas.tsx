@@ -145,8 +145,8 @@ function BuilderCanvasContent({ template }: BuilderCanvasProps) {
             >
                 <Background gap={16} size={1} />
                 <Controls />
+                <PacketLayer />
             </ReactFlow>
-            <PacketLayer />
             <ControlPanel />
             <SaveControls />
             {selectedNode && (

@@ -31,16 +31,61 @@ function PacketItem({ packet }: { packet: Packet }) {
 
     if (!sourceNode || !targetNode) return null;
 
-    // Calculate positions
-    const sourceX = sourceNode.position.x + (sourceNode.width || 150) / 2;
-    const sourceY = sourceNode.position.y + (sourceNode.height || 50) / 2;
-    const targetX = targetNode.position.x + (targetNode.width || 150) / 2;
-    const targetY = targetNode.position.y + (targetNode.height || 50) / 2;
+    // Calculate Handle Positions
+    // Source: Right Handle, Target: Left Handle
+    const sourceW = (sourceNode as any).measured?.width ?? sourceNode.width ?? sourceNode.data?.width ?? 150;
+    const sourceH = (sourceNode as any).measured?.height ?? sourceNode.height ?? sourceNode.data?.height ?? 50;
+    const targetW = (targetNode as any).measured?.width ?? targetNode.width ?? targetNode.data?.width ?? 150;
+    const targetH = (targetNode as any).measured?.height ?? targetNode.height ?? targetNode.data?.height ?? 50;
 
-    // Interpolate
+    const sourceHandleX = sourceNode.position.x + sourceW;
+    const sourceHandleY = sourceNode.position.y + sourceH / 2;
+    const targetHandleX = targetNode.position.x;
+    const targetHandleY = targetNode.position.y + targetH / 2;
+
+    // Calculate Control Points for Cubic Bezier (Standard React Flow Logic)
+    // Curvature logic: typically 0.5 * distance for automatic horizontal edges
+    const centerX = (sourceHandleX + targetHandleX) / 2;
+    // For strictly horizontal flow (Right -> Left), we usually maintain same Y for control points relative to handles? No.
+    // React Flow default:
+    // cp1 = source + curvature
+    // cp2 = target - curvature
+    // Where curvature is roughly abs(targetX - sourceX) / 2?
+    // Let's use a standard nice curve.
+
+    // Fallback logic for calculating control points
+    const dist = Math.sqrt((targetHandleX - sourceHandleX) ** 2 + (targetHandleY - sourceHandleY) ** 2);
+    const minCurvature = 50;
+    const maxCurvature = 150;
+    // Simple logic:
+    const curvature = Math.min(Math.max(Math.abs(targetHandleX - sourceHandleX) * 0.5, minCurvature), maxCurvature);
+
+    const cp1X = sourceHandleX + curvature;
+    const cp1Y = sourceHandleY;
+    const cp2X = targetHandleX - curvature;
+    const cp2Y = targetHandleY;
+
+    // Cubic Bezier Interpolation
+    // B(t) = (1-t)^3 P0 + 3(1-t)^2 t P1 + 3(1-t) t^2 P2 + t^3 P3
     const t = packet.progress / 100;
-    const currentX = sourceX + (targetX - sourceX) * t;
-    const currentY = sourceY + (targetY - sourceY) * t;
+
+    // Reverse logic if this is a Response (packet coming back)? 
+    // Actually the packet logic itself implies source->target. 
+    // If packet.type === 'response', the 'sourceNodeId' is effectively the API and 'target' is Client in the store?
+    // Let's rely on the store's source/target. If store swaps them for response, this logic works.
+
+    const oneMinusT = 1 - t;
+    const currentX =
+        Math.pow(oneMinusT, 3) * sourceHandleX +
+        3 * Math.pow(oneMinusT, 2) * t * cp1X +
+        3 * oneMinusT * Math.pow(t, 2) * cp2X +
+        Math.pow(t, 3) * targetHandleX;
+
+    const currentY =
+        Math.pow(oneMinusT, 3) * sourceHandleY +
+        3 * Math.pow(oneMinusT, 2) * t * cp1Y +
+        3 * oneMinusT * Math.pow(t, 2) * cp2Y +
+        Math.pow(t, 3) * targetHandleY;
 
     return (
         <motion.div
@@ -49,7 +94,8 @@ function PacketItem({ packet }: { packet: Packet }) {
                 x: currentX - 12, // Center the 24px icon
                 y: currentY - 12,
                 opacity: 1,
-                scale: 1
+                scale: 1,
+                // Optional: Rotate along path? Maybe too much for now
             }}
             exit={{ opacity: 0, scale: 0 }}
             transition={{ duration: 0 }} // Controlled by state updates

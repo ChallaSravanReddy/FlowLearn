@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { type Node, type Edge } from 'reactflow';
 import { persist } from 'zustand/middleware';
+import { type Lesson } from '../types/lesson';
 
 export type SavedFlow = {
     id: string;
@@ -8,6 +9,7 @@ export type SavedFlow = {
     description: string;
     nodes: Node[];
     edges: Edge[];
+    lessons?: Lesson[];
     createdAt: number;
 };
 
