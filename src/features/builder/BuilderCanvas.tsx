@@ -32,12 +32,14 @@ let id = 0;
 const getId = () => `dndnode_${id++}`;
 
 import { type Template } from '../../data/templates';
+import { type CourseMedia } from '../../types/media';
 
 interface BuilderCanvasProps {
     template?: Template | null;
+    media?: CourseMedia;
 }
 
-function BuilderCanvasContent({ template }: BuilderCanvasProps) {
+function BuilderCanvasContent({ template, media }: BuilderCanvasProps) {
     const reactFlowWrapper = useRef<HTMLDivElement>(null);
     const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -68,7 +70,7 @@ function BuilderCanvasContent({ template }: BuilderCanvasProps) {
     }), []);
 
     const onConnect = useCallback(
-        (params: Connection) => setEdges((eds) => addEdge(params, eds)),
+        (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),
         [setEdges]
     );
 
@@ -148,7 +150,7 @@ function BuilderCanvasContent({ template }: BuilderCanvasProps) {
                 <PacketLayer />
             </ReactFlow>
             <ControlPanel />
-            <SaveControls />
+            <SaveControls media={media} />
             {selectedNode && (
                 <NodePropertiesPanel
                     key={selectedNode.id}
@@ -161,10 +163,10 @@ function BuilderCanvasContent({ template }: BuilderCanvasProps) {
     );
 }
 
-export function BuilderCanvas({ template }: BuilderCanvasProps) {
+export function BuilderCanvas({ template, media }: BuilderCanvasProps) {
     return (
         <ReactFlowProvider>
-            <BuilderCanvasContent template={template} />
+            <BuilderCanvasContent template={template} media={media} />
         </ReactFlowProvider>
     );
 }

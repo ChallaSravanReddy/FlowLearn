@@ -12,7 +12,8 @@ export function PacketLayer() {
         <div className="absolute inset-0 pointer-events-none z-20 overflow-visible">
             <AnimatePresence>
                 {packets.map((packet) => {
-                    if (packet.status === 'processing') return null; // Hide when inside node? Or show sticky? Let's hide for now or show on node
+                    // Only show packets that are currently "moving" on an edge
+                    if (packet.status !== 'moving') return null;
                     return <PacketItem key={packet.id} packet={packet} />;
                 })}
             </AnimatePresence>
@@ -31,86 +32,110 @@ function PacketItem({ packet }: { packet: Packet }) {
 
     if (!sourceNode || !targetNode) return null;
 
-    // Calculate Handle Positions
-    // Source: Right Handle, Target: Left Handle
-    const sourceW = (sourceNode as any).measured?.width ?? sourceNode.width ?? sourceNode.data?.width ?? 150;
-    const sourceH = (sourceNode as any).measured?.height ?? sourceNode.height ?? sourceNode.data?.height ?? 50;
-    const targetW = (targetNode as any).measured?.width ?? targetNode.width ?? targetNode.data?.width ?? 150;
-    const targetH = (targetNode as any).measured?.height ?? targetNode.height ?? targetNode.data?.height ?? 50;
+    // Determine Handle Positions
+    // If we have an edge, we can theoretically get handle IDs, but for standard BackendNode
+    // we use Position.Right for source and Position.Left for target.
 
-    const sourceHandleX = sourceNode.position.x + sourceW;
-    const sourceHandleY = sourceNode.position.y + sourceH / 2;
-    const targetHandleX = targetNode.position.x;
-    const targetHandleY = targetNode.position.y + targetH / 2;
+    const sourceW = (sourceNode as any).measured?.width ?? sourceNode.width ?? 150;
+    const sourceH = (sourceNode as any).measured?.height ?? sourceNode.height ?? 50;
+    const targetH = (targetNode as any).measured?.height ?? targetNode.height ?? 50;
 
-    // Calculate Control Points for Cubic Bezier (Standard React Flow Logic)
-    // Curvature logic: typically 0.5 * distance for automatic horizontal edges
-    const centerX = (sourceHandleX + targetHandleX) / 2;
-    // For strictly horizontal flow (Right -> Left), we usually maintain same Y for control points relative to handles? No.
-    // React Flow default:
-    // cp1 = source + curvature
-    // cp2 = target - curvature
-    // Where curvature is roughly abs(targetX - sourceX) / 2?
-    // Let's use a standard nice curve.
+    // Source Point (Right Handle)
+    const sourceX = sourceNode.position.x + sourceW;
+    const sourceY = sourceNode.position.y + sourceH / 2;
 
-    // Fallback logic for calculating control points
-    const dist = Math.sqrt((targetHandleX - sourceHandleX) ** 2 + (targetHandleY - sourceHandleY) ** 2);
-    const minCurvature = 50;
-    const maxCurvature = 150;
-    // Simple logic:
-    const curvature = Math.min(Math.max(Math.abs(targetHandleX - sourceHandleX) * 0.5, minCurvature), maxCurvature);
+    // Target Point (Left Handle)
+    const targetX = targetNode.position.x;
+    const targetY = targetNode.position.y + targetH / 2;
 
-    const cp1X = sourceHandleX + curvature;
-    const cp1Y = sourceHandleY;
-    const cp2X = targetHandleX - curvature;
-    const cp2Y = targetHandleY;
+    // Handle curved paths (Bezier)
+    const distX = targetX - sourceX;
 
-    // Cubic Bezier Interpolation
-    // B(t) = (1-t)^3 P0 + 3(1-t)^2 t P1 + 3(1-t) t^2 P2 + t^3 P3
+    // Curvature helper
+    const curvature = Math.max(Math.abs(distX) * 0.5, 50);
+
+    // Control points for cubic bezier
+    // Start -> CP1 -> CP2 -> End
+    const cp1X = sourceX + curvature;
+    const cp1Y = sourceY;
+    const cp2X = targetX - curvature;
+    const cp2Y = targetY;
+
+    // Interpolation (Cubic Bezier)
     const t = packet.progress / 100;
+    const mt = 1 - t;
 
-    // Reverse logic if this is a Response (packet coming back)? 
-    // Actually the packet logic itself implies source->target. 
-    // If packet.type === 'response', the 'sourceNodeId' is effectively the API and 'target' is Client in the store?
-    // Let's rely on the store's source/target. If store swaps them for response, this logic works.
+    // P = (1-t)^3*P0 + 3(1-t)^2*t*P1 + 3(1-t)*t^2*P2 + t^3*P3
+    const x = Math.pow(mt, 3) * sourceX +
+        3 * Math.pow(mt, 2) * t * cp1X +
+        3 * mt * Math.pow(t, 2) * cp2X +
+        Math.pow(t, 3) * targetX;
 
-    const oneMinusT = 1 - t;
-    const currentX =
-        Math.pow(oneMinusT, 3) * sourceHandleX +
-        3 * Math.pow(oneMinusT, 2) * t * cp1X +
-        3 * oneMinusT * Math.pow(t, 2) * cp2X +
-        Math.pow(t, 3) * targetHandleX;
+    const y = Math.pow(mt, 3) * sourceY +
+        3 * Math.pow(mt, 2) * t * cp1Y +
+        3 * mt * Math.pow(t, 2) * cp2Y +
+        Math.pow(t, 3) * targetY;
 
-    const currentY =
-        Math.pow(oneMinusT, 3) * sourceHandleY +
-        3 * Math.pow(oneMinusT, 2) * t * cp1Y +
-        3 * oneMinusT * Math.pow(t, 2) * cp2Y +
-        Math.pow(t, 3) * targetHandleY;
+    // Rotation calculation (Angle of tangent)
+    // dy/dt and dx/dt for rotation
+    const dx = 3 * Math.pow(mt, 2) * (cp1X - sourceX) +
+        6 * mt * t * (cp2X - cp1X) +
+        3 * Math.pow(t, 2) * (targetX - cp2X);
+    const dy = 3 * Math.pow(mt, 2) * (cp1Y - sourceY) +
+        6 * mt * t * (cp2Y - cp1Y) +
+        3 * Math.pow(t, 2) * (targetY - cp2Y);
+
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    // Color Mapping based on Source Node Type
+    const nodeColors: Record<string, string> = {
+        client: 'bg-blue-500 border-blue-600 shadow-blue-300',
+        api: 'bg-purple-500 border-purple-600 shadow-purple-300',
+        service: 'bg-indigo-500 border-indigo-600 shadow-indigo-300',
+        database: 'bg-green-500 border-green-600 shadow-green-300',
+        cache: 'bg-orange-500 border-orange-600 shadow-orange-300',
+        queue: 'bg-pink-500 border-pink-600 shadow-pink-300',
+        loadbalancer: 'bg-teal-500 border-teal-600 shadow-teal-300',
+        cdn: 'bg-sky-500 border-sky-600 shadow-sky-300',
+        default: 'bg-gray-500 border-gray-600 shadow-gray-300',
+    };
+
+    // Override based on type first, then fallback to source node color
+    let colorClass = nodeColors.default;
+
+    if (packet.type === 'error') {
+        colorClass = 'bg-red-500 border-red-600 shadow-red-300';
+    } else if (sourceNode && sourceNode.data && sourceNode.data.type) {
+        colorClass = nodeColors[sourceNode.data.type] || nodeColors.default;
+    }
 
     return (
         <motion.div
-            initial={{ opacity: 0, scale: 0.5 }}
+            className="absolute top-0 left-0"
+            style={{ x, y, rotate: angle }}
+            initial={{ opacity: 0, scale: 0 }}
             animate={{
-                x: currentX - 12, // Center the 24px icon
-                y: currentY - 12,
+                x: x - 12,
+                y: y - 12,
                 opacity: 1,
                 scale: 1,
-                // Optional: Rotate along path? Maybe too much for now
+                rotate: angle
             }}
             exit={{ opacity: 0, scale: 0 }}
-            transition={{ duration: 0 }} // Controlled by state updates
-            className="absolute top-0 left-0"
+            transition={{ duration: 0.1 }}
         >
             <div className={`
-                p-1.5 rounded-full shadow-lg border-2
-                ${packet.type === 'request' ? 'bg-blue-100 border-blue-500 text-blue-600' : ''}
-                ${packet.type === 'response' ? 'bg-green-100 border-green-500 text-green-600' : ''}
-                ${packet.type === 'error' ? 'bg-red-100 border-red-500 text-red-600' : ''}
+                w-6 h-6 rounded-md border shadow-lg flex items-center justify-center
+                ${colorClass} transition-colors duration-200
             `}>
-                {packet.type === 'request' && <FileText size={14} />}
-                {packet.type === 'response' && <CheckCircle size={14} />}
-                {packet.type === 'error' && <XCircle size={14} />}
+                <div className="absolute inset-0 rounded-md bg-white/20 animate-pulse" />
+                {packet.type === 'request' && <FileText size={12} className="relative z-10" />}
+                {packet.type === 'response' && <CheckCircle size={12} className="relative z-10" />}
+                {packet.type === 'error' && <XCircle size={12} className="relative z-10" />}
             </div>
+
+            {/* Trail effect */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-[150%] -translate-y-1/2 w-4 h-[2px] bg-gradient-to-r from-transparent to-white/50 rounded-full" />
         </motion.div>
     );
 }

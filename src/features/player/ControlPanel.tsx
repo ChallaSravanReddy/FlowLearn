@@ -2,7 +2,7 @@ import { Play, Pause, Square, RotateCcw } from 'lucide-react';
 import { useExecutionStore } from '../../store/executionStore';
 
 export function ControlPanel() {
-    const { isRunning, setIsRunning, clearLogs, addLog } = useExecutionStore();
+    const { isRunning, setIsRunning, clear, addLog } = useExecutionStore();
 
     const handlePlay = () => {
         setIsRunning(true);
@@ -16,7 +16,7 @@ export function ControlPanel() {
 
     const handleStop = () => {
         setIsRunning(false);
-        clearLogs();
+        clear();
         addLog('Execution stopped', 'info');
     };
 

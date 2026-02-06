@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { type Node, type Edge } from 'reactflow';
 import { persist } from 'zustand/middleware';
 import { type Lesson } from '../types/lesson';
+import { type CourseTimeline, type CourseMedia, type SimulationEvent } from '../types/media';
 
 export type SavedFlow = {
     id: string;
@@ -10,6 +11,9 @@ export type SavedFlow = {
     nodes: Node[];
     edges: Edge[];
     lessons?: Lesson[];
+    timeline?: CourseTimeline; // Legacy - for backward compatibility
+    media?: CourseMedia; // New upload-based media
+    simulationEvents?: SimulationEvent[]; // Time-based simulation triggers
     createdAt: number;
 };
 

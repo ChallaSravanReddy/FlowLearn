@@ -39,11 +39,15 @@ export type NodeExecutionState = {
 
 export type ExecutionState = {
     isRunning: boolean;
+    currentTime: number;
+    totalDuration: number;
     logs: LogEntry[];
     packets: Packet[];
     nodeStates: Record<string, NodeExecutionState>;
 
     setIsRunning: (isRunning: boolean) => void;
+    setCurrentTime: (time: number) => void;
+    setTotalDuration: (duration: number) => void;
     addLog: (message: string, type?: 'info' | 'success' | 'error') => void;
     clear: () => void; // Clears logs and packets
 
@@ -58,11 +62,15 @@ export type ExecutionState = {
 
 export const useExecutionStore = create<ExecutionState>((set) => ({
     isRunning: false,
+    currentTime: 0,
+    totalDuration: 0,
     logs: [],
     packets: [],
     nodeStates: {},
 
     setIsRunning: (isRunning) => set({ isRunning }),
+    setCurrentTime: (currentTime) => set({ currentTime }),
+    setTotalDuration: (totalDuration) => set({ totalDuration }),
 
     addLog: (message, type = 'info') =>
         set((state) => ({

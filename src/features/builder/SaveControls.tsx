@@ -2,8 +2,13 @@ import { Save } from 'lucide-react';
 import { useReactFlow } from 'reactflow';
 import { useCourseStore } from '../../store/courseStore';
 import { useExecutionStore } from '../../store/executionStore';
+import { type CourseMedia } from '../../types/media';
 
-export function SaveControls() {
+interface SaveControlsProps {
+    media?: CourseMedia;
+}
+
+export function SaveControls({ media }: SaveControlsProps) {
     const { getNodes, getEdges } = useReactFlow();
     const { saveFlow } = useCourseStore();
     const { addLog } = useExecutionStore();
@@ -11,6 +16,13 @@ export function SaveControls() {
     const handleSave = () => {
         const nodes = getNodes();
         const edges = getEdges();
+
+        // Validate that we have media before saving
+        if (!media?.video && !media?.audio) {
+            addLog('Please upload video or audio before saving', 'error');
+            alert('Please upload at least a video or audio file before saving the course');
+            return;
+        }
 
         // Simple save implementation - saves as a new unique flow every time for now or updates fixed ID
         // Ideally we would have a flow ID in the URL.
@@ -20,10 +32,11 @@ export function SaveControls() {
             description: 'Created in Instructor Builder',
             nodes,
             edges,
+            media, // Include the uploaded media
         };
 
         saveFlow(newFlow);
-        addLog('Flow saved successfully!', 'success');
+        addLog('Flow saved successfully with media!', 'success');
     };
 
     return (
