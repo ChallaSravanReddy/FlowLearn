@@ -6,16 +6,7 @@ import { type NodeProperties } from '../../types/node';
 const TICK_RATE = 50; // ms
 
 export function useFlowExecution() {
-    const {
-        isRunning,
-        currentTime,
-        addLog,
-        packets,
-        updatePackets,
-        addPacket,
-        updateNodeState
-    } = useExecutionStore();
-
+    const isRunning = useExecutionStore((state) => state.isRunning);
     const { getNodes, getEdges } = useReactFlow();
 
     // Spawn ref to prevent spam spawning
@@ -23,6 +14,7 @@ export function useFlowExecution() {
     const triggeredEvents = useRef<Set<string>>(new Set());
 
     const spawnRequest = useCallback((sourceId?: string, targetId?: string) => {
+        const { addPacket, updateNodeState } = useExecutionStore.getState();
         const nodes = getNodes();
         const edges = getEdges();
 
@@ -35,9 +27,10 @@ export function useFlowExecution() {
         } else {
             const clientNodes = nodes.filter(n => n.type === 'client');
             if (clientNodes.length === 0) return;
-            sourceNode = clientNodes[Math.floor(Math.random() * clientNodes.length)];
-            if (!sourceNode) return;
-            const outgoingEdges = edges.filter(e => e.source === sourceNode.id);
+            const chosenNode = clientNodes[Math.floor(Math.random() * clientNodes.length)];
+            if (!chosenNode) return;
+            sourceNode = chosenNode;
+            const outgoingEdges = edges.filter(e => e.source === chosenNode.id);
             if (outgoingEdges.length === 0) return;
             edge = outgoingEdges[Math.floor(Math.random() * outgoingEdges.length)];
         }
@@ -63,12 +56,13 @@ export function useFlowExecution() {
         const sid = sourceNode.id;
         setTimeout(() => updateNodeState(sid, { active: false }), 500);
 
-    }, [getNodes, getEdges, addPacket, updateNodeState]);
+    }, [getNodes, getEdges]);
 
     useEffect(() => {
         if (!isRunning) return;
 
         const interval = setInterval(() => {
+            const { packets, addLog, updatePackets, updateNodeState } = useExecutionStore.getState();
             const now = Date.now();
             const nodes = getNodes() as Node<NodeProperties>[];
             const edges = getEdges();
@@ -93,21 +87,17 @@ export function useFlowExecution() {
                 const updatedPackets = packets.map(packet => {
                     // ---- CASE: MOVING ----
                     if (packet.status === 'moving') {
+                        const sourceNode = nodes.find(n => n.id === packet.sourceNodeId);
                         const targetNode = nodes.find(n => n.id === packet.targetNodeId);
 
-                        // Default speed fallback if node missing or no latency set
-                        let moveIncrement = 2; // Default ~2.5s for 100%
-
-                        if (targetNode) {
-                            const duration = targetNode.data.latency || 1000; // Default 1s travel time if not set
-
-                            // Calculate increment to complete 100% in 'duration' ms
-                            // Updates happen every TICK_RATE (50ms)
-                            // Total Ticks = duration / TICK_RATE
-                            // Increment = 100 / Total Ticks
-                            const totalTicks = Math.max(1, duration / TICK_RATE);
-                            moveIncrement = 100 / totalTicks;
+                        // Transit time: if from client, use client network latency. Otherwise, default to 400ms.
+                        let duration = 400;
+                        if (sourceNode && sourceNode.data.type === 'client') {
+                            duration = sourceNode.data.latency || 500;
                         }
+
+                        const totalTicks = Math.max(1, duration / TICK_RATE);
+                        const moveIncrement = 100 / totalTicks;
 
                         const newProgress = packet.progress + moveIncrement;
 
@@ -147,8 +137,8 @@ export function useFlowExecution() {
                                 status: 'processing',
                                 nodeId: targetNode.id,
                                 progress: 0,
-                                // Processing is effectively instant (0 wait) so animation stays on lines
-                                processingTimeRemaining: 0,
+                                // Calculate processing duration from target node's processing latency (default to 500ms)
+                                processingTimeRemaining: targetNode.data.latency || 500,
                                 edgeId: undefined,
                                 pathStack: [...packet.pathStack, targetNode.id]
                             } as Packet;
@@ -159,12 +149,20 @@ export function useFlowExecution() {
 
                     // ---- CASE: PROCESSING ----
                     if (packet.status === 'processing') {
-                        // Instant processing
                         const currentNodeId = packet.nodeId!;
                         const currentNode = nodes.find(n => n.id === currentNodeId);
 
-                        // No waiting period check here (latency is handled in moving phase)
+                        // Decrement processing time remaining based on tick rate
+                        const remaining = (packet.processingTimeRemaining ?? 500) - TICK_RATE;
 
+                        if (remaining > 0) {
+                            return {
+                                ...packet,
+                                processingTimeRemaining: remaining
+                            };
+                        }
+
+                        // Processing completed! Trigger next routing/action
                         updateNodeState(currentNodeId, { active: true, processingCount: Math.max(0, (packets.filter(p => p.nodeId === currentNodeId).length) - 1) });
 
                         if (packet.type === 'response') {
@@ -233,5 +231,5 @@ export function useFlowExecution() {
         }, TICK_RATE);
 
         return () => clearInterval(interval);
-    }, [isRunning, packets, getNodes, getEdges, updatePackets, addPacket, addLog, updateNodeState, spawnRequest, currentTime]);
+    }, [isRunning, getNodes, getEdges, spawnRequest]);
 }

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, SkipBack, SkipForward } from 'lucide-react';
 import { formatDuration } from '../../utils/mediaUpload';
+import { useExecutionStore } from '../../store/executionStore';
 
 interface VideoPlayerProps {
     videoUrl?: string;
@@ -19,7 +20,8 @@ export function VideoPlayer({
     onPlayStateChange,
     className = ''
 }: VideoPlayerProps) {
-    const [isPlaying, setIsPlaying] = useState(false);
+    const isRunning = useExecutionStore((state) => state.isRunning);
+    const setIsRunning = useExecutionStore((state) => state.setIsRunning);
     const [currentTime, setCurrentTime] = useState(0);
     const [volume, setVolume] = useState(1);
     const [isMuted, setIsMuted] = useState(false);
@@ -59,20 +61,22 @@ export function VideoPlayer({
         }
     }, [onTimeUpdate, isDragging]);
 
-    // Play/Pause
-    const togglePlayPause = useCallback(() => {
-        const newPlayState = !isPlaying;
-        setIsPlaying(newPlayState);
-        onPlayStateChange(newPlayState);
-
-        if (newPlayState) {
-            videoRef.current?.play();
-            audioRef.current?.play();
+    // Sync video and audio playback elements with store running state
+    useEffect(() => {
+        if (isRunning) {
+            videoRef.current?.play().catch(() => {});
+            audioRef.current?.play().catch(() => {});
         } else {
             videoRef.current?.pause();
             audioRef.current?.pause();
         }
-    }, [isPlaying, onPlayStateChange]);
+        onPlayStateChange(isRunning);
+    }, [isRunning, onPlayStateChange]);
+
+    // Play/Pause
+    const togglePlayPause = useCallback(() => {
+        setIsRunning(!isRunning);
+    }, [isRunning, setIsRunning]);
 
     // Seek
     const handleSeek = useCallback((time: number) => {
@@ -172,21 +176,21 @@ export function VideoPlayer({
         if (controlsTimeoutRef.current) {
             clearTimeout(controlsTimeoutRef.current);
         }
-        if (isPlaying) {
+        if (isRunning) {
             controlsTimeoutRef.current = setTimeout(() => {
                 setShowControls(false);
             }, 3000);
         }
-    }, [isPlaying]);
+    }, [isRunning]);
 
     const progress = (currentTime / duration) * 100;
 
     return (
         <div
             ref={containerRef}
-            className={`relative bg-black rounded-lg overflow-hidden shadow-2xl ${className}`}
+            className={`relative bg-black rounded-lg overflow-hidden shadow-2xl aspect-video ${className}`}
             onMouseMove={resetControlsTimeout}
-            onMouseLeave={() => isPlaying && setShowControls(false)}
+            onMouseLeave={() => isRunning && setShowControls(false)}
         >
             {/* Video Element */}
             {videoUrl && (
@@ -196,8 +200,7 @@ export function VideoPlayer({
                     className="w-full h-full object-contain"
                     onTimeUpdate={handleTimeUpdate}
                     onEnded={() => {
-                        setIsPlaying(false);
-                        onPlayStateChange(false);
+                        setIsRunning(false);
                     }}
                 />
             )}
@@ -216,7 +219,7 @@ export function VideoPlayer({
                 className="absolute inset-0 flex items-center justify-center cursor-pointer"
                 onClick={togglePlayPause}
             >
-                {!isPlaying && (
+                {!isRunning && (
                     <div className="bg-black/50 rounded-full p-6 backdrop-blur-sm">
                         <Play size={48} className="text-white" fill="white" />
                     </div>
@@ -254,7 +257,7 @@ export function VideoPlayer({
                             onClick={togglePlayPause}
                             className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                         >
-                            {isPlaying ? (
+                            {isRunning ? (
                                 <Pause size={24} className="text-white" />
                             ) : (
                                 <Play size={24} className="text-white" />

@@ -15,6 +15,73 @@ export function MediaUploader({ isOpen, onClose, onMediaUpdate, initialMedia }: 
     const [media, setMedia] = useState<CourseMedia>(initialMedia || { totalDuration: 0 });
     const [uploading, setUploading] = useState<'video' | 'audio' | null>(null);
     const [dragOver, setDragOver] = useState<'video' | 'audio' | null>(null);
+    const [videoUrl, setVideoUrl] = useState(initialMedia?.video?.url || '');
+    const [audioUrl, setAudioUrl] = useState(initialMedia?.audio?.url || '');
+
+    const handleVideoUrlApply = (url: string) => {
+        if (!url) return;
+        const video = document.createElement('video');
+        video.src = url;
+        video.onloadedmetadata = () => {
+            setMedia(prev => ({
+                ...prev,
+                video: {
+                    id: `video-url-${Date.now()}`,
+                    name: url.split('/').pop() || 'Remote Video',
+                    url: url,
+                    duration: video.duration,
+                },
+                totalDuration: Math.max(prev.totalDuration, video.duration),
+            }));
+            alert('Video linked successfully!');
+        };
+        video.onerror = () => {
+            // Fallback duration if metadata fails to load (CORS block)
+            setMedia(prev => ({
+                ...prev,
+                video: {
+                    id: `video-url-${Date.now()}`,
+                    name: 'Remote Video',
+                    url: url,
+                    duration: 180, // 3 minutes default
+                },
+                totalDuration: Math.max(prev.totalDuration, 180),
+            }));
+            alert('Video linked with fallback duration (3 min).');
+        };
+    };
+
+    const handleAudioUrlApply = (url: string) => {
+        if (!url) return;
+        const audio = new Audio();
+        audio.src = url;
+        audio.onloadedmetadata = () => {
+            setMedia(prev => ({
+                ...prev,
+                audio: {
+                    id: `audio-url-${Date.now()}`,
+                    name: url.split('/').pop() || 'Remote Audio',
+                    url: url,
+                    duration: audio.duration,
+                },
+                totalDuration: Math.max(prev.totalDuration, audio.duration),
+            }));
+            alert('Audio linked successfully!');
+        };
+        audio.onerror = () => {
+            setMedia(prev => ({
+                ...prev,
+                audio: {
+                    id: `audio-url-${Date.now()}`,
+                    name: 'Remote Audio',
+                    url: url,
+                    duration: 180, // 3 minutes default
+                },
+                totalDuration: Math.max(prev.totalDuration, 180),
+            }));
+            alert('Audio linked with fallback duration (3 min).');
+        };
+    };
 
     const videoInputRef = useRef<HTMLInputElement>(null);
     const audioInputRef = useRef<HTMLInputElement>(null);
@@ -180,29 +247,47 @@ export function MediaUploader({ isOpen, onClose, onMediaUpdate, initialMedia }: 
                                     </div>
                                 </div>
                             ) : (
-                                <div
-                                    onDragOver={(e) => { e.preventDefault(); setDragOver('video'); }}
-                                    onDragLeave={() => setDragOver(null)}
-                                    onDrop={(e) => handleDrop(e, 'video')}
-                                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer
-                                        ${dragOver === 'video' ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-400'}
-                                        ${uploading === 'video' ? 'opacity-50 pointer-events-none' : ''}
-                                    `}
-                                    onClick={() => videoInputRef.current?.click()}
-                                >
-                                    <VideoIcon size={48} className="mx-auto mb-3 text-gray-400" />
-                                    <p className="text-gray-700 font-medium mb-1">
-                                        {uploading === 'video' ? 'Uploading...' : 'Drop video file here'}
-                                    </p>
-                                    <p className="text-sm text-gray-500">or click to browse</p>
-                                    <p className="text-xs text-gray-400 mt-2">MP4, WebM, AVI (max 500MB)</p>
-                                    <input
-                                        ref={videoInputRef}
-                                        type="file"
-                                        accept="video/*"
-                                        onChange={(e) => e.target.files?.[0] && handleVideoUpload(e.target.files[0])}
-                                        className="hidden"
-                                    />
+                                <div className="space-y-3">
+                                    <div
+                                        onDragOver={(e) => { e.preventDefault(); setDragOver('video'); }}
+                                        onDragLeave={() => setDragOver(null)}
+                                        onDrop={(e) => handleDrop(e, 'video')}
+                                        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer
+                                            ${dragOver === 'video' ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-400'}
+                                            ${uploading === 'video' ? 'opacity-50 pointer-events-none' : ''}
+                                        `}
+                                        onClick={() => videoInputRef.current?.click()}
+                                    >
+                                        <VideoIcon size={48} className="mx-auto mb-3 text-gray-400" />
+                                        <p className="text-gray-700 font-medium mb-1">
+                                            {uploading === 'video' ? 'Uploading...' : 'Drop video file here'}
+                                        </p>
+                                        <p className="text-sm text-gray-500">or click to browse</p>
+                                        <p className="text-xs text-gray-400 mt-2">MP4, WebM, AVI (max 500MB)</p>
+                                        <input
+                                            ref={videoInputRef}
+                                            type="file"
+                                            accept="video/*"
+                                            onChange={(e) => e.target.files?.[0] && handleVideoUpload(e.target.files[0])}
+                                            className="hidden"
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Or paste video URL (e.g. https://example.com/video.mp4)"
+                                            value={videoUrl}
+                                            onChange={(e) => setVideoUrl(e.target.value)}
+                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleVideoUrlApply(videoUrl)}
+                                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                                        >
+                                            Link URL
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -238,29 +323,47 @@ export function MediaUploader({ isOpen, onClose, onMediaUpdate, initialMedia }: 
                                     </div>
                                 </div>
                             ) : (
-                                <div
-                                    onDragOver={(e) => { e.preventDefault(); setDragOver('audio'); }}
-                                    onDragLeave={() => setDragOver(null)}
-                                    onDrop={(e) => handleDrop(e, 'audio')}
-                                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer
-                                        ${dragOver === 'audio' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}
-                                        ${uploading === 'audio' ? 'opacity-50 pointer-events-none' : ''}
-                                    `}
-                                    onClick={() => audioInputRef.current?.click()}
-                                >
-                                    <Music size={48} className="mx-auto mb-3 text-gray-400" />
-                                    <p className="text-gray-700 font-medium mb-1">
-                                        {uploading === 'audio' ? 'Uploading...' : 'Drop audio file here'}
-                                    </p>
-                                    <p className="text-sm text-gray-500">or click to browse</p>
-                                    <p className="text-xs text-gray-400 mt-2">MP3, WAV, OGG (max 100MB)</p>
-                                    <input
-                                        ref={audioInputRef}
-                                        type="file"
-                                        accept="audio/*"
-                                        onChange={(e) => e.target.files?.[0] && handleAudioUpload(e.target.files[0])}
-                                        className="hidden"
-                                    />
+                                <div className="space-y-3">
+                                    <div
+                                        onDragOver={(e) => { e.preventDefault(); setDragOver('audio'); }}
+                                        onDragLeave={() => setDragOver(null)}
+                                        onDrop={(e) => handleDrop(e, 'audio')}
+                                        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer
+                                            ${dragOver === 'audio' ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}
+                                            ${uploading === 'audio' ? 'opacity-50 pointer-events-none' : ''}
+                                        `}
+                                        onClick={() => audioInputRef.current?.click()}
+                                    >
+                                        <Music size={48} className="mx-auto mb-3 text-gray-400" />
+                                        <p className="text-gray-700 font-medium mb-1">
+                                            {uploading === 'audio' ? 'Uploading...' : 'Drop audio file here'}
+                                        </p>
+                                        <p className="text-sm text-gray-500">or click to browse</p>
+                                        <p className="text-xs text-gray-400 mt-2">MP3, WAV, OGG (max 100MB)</p>
+                                        <input
+                                            ref={audioInputRef}
+                                            type="file"
+                                            accept="audio/*"
+                                            onChange={(e) => e.target.files?.[0] && handleAudioUpload(e.target.files[0])}
+                                            className="hidden"
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Or paste audio URL (e.g. https://example.com/audio.mp3)"
+                                            value={audioUrl}
+                                            onChange={(e) => setAudioUrl(e.target.value)}
+                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAudioUrlApply(audioUrl)}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                                        >
+                                            Link URL
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>

@@ -1,105 +1,109 @@
-import { useState, useMemo, useEffect } from 'react';
-import ReactFlow, { Background, Controls, ReactFlowProvider, useNodesState, useEdgesState } from 'reactflow';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import ReactFlow, { Background, Controls, ReactFlowProvider, useNodesState, useEdgesState, addEdge, type Connection, type Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useCourseStore } from '../store/courseStore';
 import { BackendNode } from '../nodes/BackendNode';
 import { ControlPanel } from '../features/player/ControlPanel';
 import { useFlowExecution } from '../features/player/useFlowExecution';
 import { PacketLayer } from '../features/player/PacketLayer';
 import { VideoPlayer } from '../features/player/VideoPlayer';
-import { ArrowLeft, BookOpen, Video as VideoIcon } from 'lucide-react';
-import { LessonSidebar } from '../features/player/LessonSidebar';
+import { ArrowLeft, Video as VideoIcon, Sparkles, MousePointerClick } from 'lucide-react';
 import { useExecutionStore } from '../store/executionStore';
+import { supabase } from '../lib/supabaseClient';
+import { StudentExperimentPanel } from '../features/player/StudentExperimentPanel';
+import { type NodeProperties } from '../types/node';
+import { isValidConnectionRule } from '../utils/connectionValidation';
 
 function CoursePlayerContent() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const getFlow = useCourseStore((state) => state.getFlow);
 
-    // State
-    const [flow, setFlow] = useState(id ? getFlow(id) : undefined);
+    // Course Loading States
+    const [flow, setFlow] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-    // Lesson State
-    const [showLessons, setShowLessons] = useState(false);
-    const [activeLessonIndex, setActiveLessonIndex] = useState(0);
+    // Hands-on properties state
+    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+    const selectedNode = useMemo(() => nodes.find((n) => n.id === selectedNodeId) || null, [nodes, selectedNodeId]);
+
+    // Lesson State (sidebar removed — kept for future use)
+    const [activeLessonIndex] = useState(0);
 
     // Video Player State
     const [showVideo, setShowVideo] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
-    const [isPlaying, setIsPlaying] = useState(false);
 
     // Initialize execution engine
     useFlowExecution();
 
     const {
+        isRunning,
         setCurrentTime: setStoreTime,
-        setTotalDuration: setStoreDuration,
-        setIsRunning: setStoreRunning
+        setTotalDuration: setStoreDuration
     } = useExecutionStore();
 
+    // Fetch Course from Supabase
     useEffect(() => {
-        if (id) {
-            const savedFlow = getFlow(id);
-            if (savedFlow) {
-                setFlow(savedFlow);
-                setNodes(savedFlow.nodes);
-                setEdges(savedFlow.edges);
+        if (!id) return;
 
-                if (savedFlow.media?.totalDuration) {
-                    setStoreDuration(savedFlow.media.totalDuration);
-                }
+        async function fetchCourseFlow() {
+            setLoading(true);
+            try {
+                const { data, error } = await supabase
+                    .from('flowlearn_courses')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
 
-                // Open lessons if available
-                if (savedFlow.lessons && savedFlow.lessons.length > 0) {
-                    setShowLessons(true);
+                if (error) throw error;
+
+                if (data) {
+                    setFlow(data);
+                    setNodes(data.nodes || []);
+                    setEdges(data.edges || []);
+
+                    if (data.media?.totalDuration) {
+                        setStoreDuration(data.media.totalDuration);
+                    }
+
+                    // Lesson sidebar removed from student view
+                    // Auto-show video if media exists
+                    if (data.media?.video) {
+                        setShowVideo(true);
+                    }
                 }
-                // Auto-show video if media exists
-                if (savedFlow.media?.video) {
-                    setShowVideo(true);
-                }
-            } else {
+            } catch (err) {
+                console.error('Failed to load course from Supabase:', err);
+                alert('Failed to load course from Supabase database.');
                 navigate('/student');
+            } finally {
+                setLoading(false);
             }
         }
-    }, [id, getFlow, navigate, setStoreDuration, setNodes, setEdges]);
 
-    // Handle lesson node highlighting
+        fetchCourseFlow();
+    }, [id, navigate, setStoreDuration, setNodes, setEdges]);
+
+    // Node highlight effect driven by activeLessonIndex (sidebar hidden but logic preserved)
     useEffect(() => {
-        if (showLessons && flow?.lessons && flow.lessons[activeLessonIndex]) {
-            const highlightIds = flow.lessons[activeLessonIndex].highlightNodeIds || [];
-
-            setNodes(nds => nds.map(node => ({
-                ...node,
-                style: {
-                    ...node.style,
-                    opacity: highlightIds.length === 0 || highlightIds.includes(node.id) ? 1 : 0.3,
-                    filter: highlightIds.length === 0 || highlightIds.includes(node.id) ? 'none' : 'grayscale(100%)',
-                    transition: 'all 0.3s ease'
-                }
-            })));
-        } else {
-            // Reset styles
-            setNodes(nds => nds.map(node => ({
-                ...node,
-                style: { ...node.style, opacity: 1, filter: 'none' }
-            })));
-        }
-    }, [showLessons, activeLessonIndex, flow, setNodes]);
+        setNodes(nds => nds.map(node => ({
+            ...node,
+            style: { ...node.style, opacity: 1, filter: 'none' }
+        })));
+    }, [activeLessonIndex, setNodes]);
 
     // Handle simulation events based on video time
     useEffect(() => {
-        if (!flow?.simulationEvents || !isPlaying) return;
+        if (!flow?.simulationEvents || !isRunning) return;
 
         // Find events that should trigger at current time
         const eventsToTrigger = flow.simulationEvents.filter(
-            event => event.time <= currentTime && event.time > currentTime - 0.5
+            (event: any) => event.time <= currentTime && event.time > currentTime - 0.5
         );
 
-        eventsToTrigger.forEach(event => {
-            // Handle different event types
+        eventsToTrigger.forEach((event: any) => {
             switch (event.action) {
                 case 'highlight':
                     setNodes(nds => nds.map(node => ({
@@ -113,7 +117,6 @@ function CoursePlayerContent() {
                     })));
                     break;
                 case 'pulse':
-                    // Add pulse animation to specific node
                     setNodes(nds => nds.map(node => ({
                         ...node,
                         className: node.id === event.nodeId ? 'animate-pulse' : ''
@@ -121,49 +124,113 @@ function CoursePlayerContent() {
                     break;
             }
         });
-    }, [currentTime, isPlaying, flow?.simulationEvents, setNodes]);
+    }, [currentTime, isRunning, flow?.simulationEvents, setNodes]);
 
     const handleTimeUpdate = (time: number) => {
         setCurrentTime(time);
         setStoreTime(time);
     };
 
-    const handlePlayStateChange = (playing: boolean) => {
-        setIsPlaying(playing);
-        setStoreRunning(playing);
+    const handlePlayStateChange = () => {
+        // Handled directly via useExecutionStore subscription
     };
+
+    // Hands-on controls
+    const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+        setSelectedNodeId(node.id);
+    }, []);
+
+    const onPaneClick = useCallback(() => {
+        setSelectedNodeId(null);
+    }, []);
+
+    const onConnect = useCallback(
+        (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),
+        [setEdges]
+    );
+
+    const isValidConnection = useCallback(
+        (connection: Connection) => {
+            const sourceNode = nodes.find(n => n.id === connection.source);
+            const targetNode = nodes.find(n => n.id === connection.target);
+            if (!sourceNode || !targetNode) return false;
+
+            const sourceType = sourceNode.data?.type || sourceNode.type || '';
+            const targetType = targetNode.data?.type || targetNode.type || '';
+
+            return isValidConnectionRule(sourceType, targetType);
+        },
+        [nodes]
+    );
+
+    const handleNodePropertiesUpdate = useCallback((nodeId: string, properties: Partial<NodeProperties>) => {
+        setNodes((nds) => nds.map((node) => {
+            if (node.id === nodeId) {
+                return {
+                    ...node,
+                    data: { ...node.data, ...properties }
+                };
+            }
+            return node;
+        }));
+    }, [setNodes]);
 
     const nodeTypes = useMemo(() => ({
         client: BackendNode,
         api: BackendNode,
         service: BackendNode,
+        server: BackendNode,
+        serverless: BackendNode,
         database: BackendNode,
         cache: BackendNode,
         queue: BackendNode,
+        broker: BackendNode,
         loadbalancer: BackendNode,
         cdn: BackendNode,
+        dns: BackendNode,
+        waf: BackendNode,
+        firewall: BackendNode,
+        auth: BackendNode,
+        storage: BackendNode,
+        search: BackendNode,
+        worker: BackendNode,
+        notification: BackendNode,
     }), []);
 
+    if (loading) {
+        return (
+            <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white gap-4">
+                <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-slate-400 font-medium">Syncing class sandbox from database...</p>
+            </div>
+        );
+    }
+
     if (!flow) {
-        return <div className="p-8 text-center text-gray-500">Loading flow...</div>;
+        return <div className="p-8 text-center text-gray-500">Failed to load class.</div>;
     }
 
     const hasMedia = flow.media?.video || flow.media?.audio;
 
     return (
-        <div className="h-screen w-full flex bg-gray-50 flex-col">
+        <div className="h-screen w-full flex bg-slate-950 flex-col">
             {/* Header */}
-            <div className="h-16 bg-white border-b border-gray-200 px-6 flex items-center justify-between z-10">
+            <div className="h-16 bg-slate-900 border-b border-slate-800 px-6 flex items-center justify-between z-10">
                 <div className="flex items-center gap-4">
                     <button
                         onClick={() => navigate('/student')}
-                        className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"
+                        className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
                     >
                         <ArrowLeft size={20} />
                     </button>
                     <div>
-                        <h1 className="text-xl font-bold text-gray-900">{flow.title}</h1>
-                        <p className="text-xs text-gray-500">{flow.description}</p>
+                        <h1 className="text-lg font-bold text-white flex items-center gap-2">
+                            {flow.title}
+                            <span className="flex items-center gap-1 text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-full font-bold">
+                                <Sparkles size={10} /> Live Sandbox
+                            </span>
+                        </h1>
+                        <p className="text-xs text-slate-400">{flow.description}</p>
                     </div>
                 </div>
 
@@ -171,25 +238,18 @@ function CoursePlayerContent() {
                     {hasMedia && (
                         <button
                             onClick={() => setShowVideo(!showVideo)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-sm font-medium
-                                ${showVideo ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors text-xs font-semibold
+                                ${showVideo
+                                    ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                                    : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+                                }
                             `}
                         >
-                            <VideoIcon size={16} />
+                            <VideoIcon size={14} />
                             {showVideo ? 'Hide Video' : 'Show Video'}
                         </button>
                     )}
-                    {flow.lessons && flow.lessons.length > 0 && (
-                        <button
-                            onClick={() => setShowLessons(!showLessons)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors text-sm font-medium
-                                ${showLessons ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
-                            `}
-                        >
-                            <BookOpen size={16} />
-                            {showLessons ? 'Hide Lessons' : 'Show Lessons'}
-                        </button>
-                    )}
+
                 </div>
             </div>
 
@@ -202,10 +262,14 @@ function CoursePlayerContent() {
                         nodeTypes={nodeTypes}
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
+                        onConnect={onConnect}
+                        onNodeClick={onNodeClick}
+                        onPaneClick={onPaneClick}
+                        isValidConnection={isValidConnection}
                         fitView
                     >
-                        <Background gap={16} size={1} />
-                        <Controls />
+                        <Background color="#334155" gap={16} size={1} />
+                        <Controls className="bg-slate-900 border border-slate-800 text-white rounded shadow-md" />
                         <PacketLayer />
                     </ReactFlow>
 
@@ -222,19 +286,35 @@ function CoursePlayerContent() {
                             duration={flow.media?.totalDuration || 0}
                             onTimeUpdate={handleTimeUpdate}
                             onPlayStateChange={handlePlayStateChange}
-                            className="shadow-2xl"
+                            className="shadow-2xl border border-slate-800 rounded-2xl overflow-hidden"
                         />
                     </div>
                 )}
 
-                {/* Lesson Sidebar */}
-                {showLessons && flow.lessons && (
-                    <LessonSidebar
-                        lessons={flow.lessons}
-                        activeLessonIndex={activeLessonIndex}
-                        onLessonChange={setActiveLessonIndex}
-                        onClose={() => setShowLessons(false)}
-                    />
+
+
+                {/* Click-to-experiment hint — only shown when nothing is selected */}
+                {!selectedNode && (
+                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+                        <div className="flex items-center gap-2 bg-slate-900/80 backdrop-blur-sm border border-slate-700/60 rounded-full px-4 py-2 shadow-xl animate-bounce">
+                            <MousePointerClick size={14} className="text-indigo-400" />
+                            <span className="text-xs text-slate-300 font-medium whitespace-nowrap">
+                                Click any component to experiment with its settings!
+                            </span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Student Experiment Panel — appears when a node is selected */}
+                {selectedNode && (
+                    <div className="absolute top-4 left-4 z-20">
+                        <StudentExperimentPanel
+                            key={selectedNode.id}
+                            node={selectedNode}
+                            onClose={() => setSelectedNodeId(null)}
+                            onUpdate={handleNodePropertiesUpdate}
+                        />
+                    </div>
                 )}
             </div>
         </div>

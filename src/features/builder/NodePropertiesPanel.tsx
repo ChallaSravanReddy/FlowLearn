@@ -6,9 +6,10 @@ interface NodePropertiesPanelProps {
     node: Node<NodeProperties>;
     onClose: () => void;
     onUpdate: (nodeId: string, properties: Partial<NodeProperties>) => void;
+    onDelete?: (nodeId: string) => void;
 }
 
-export function NodePropertiesPanel({ node, onClose, onUpdate }: NodePropertiesPanelProps) {
+export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete }: NodePropertiesPanelProps) {
     const PROPERTY_CONFIG: Record<string, Array<{
         key: keyof NodeProperties;
         label: string;
@@ -64,6 +65,27 @@ export function NodePropertiesPanel({ node, onClose, onUpdate }: NodePropertiesP
             { key: 'label', label: 'Label', type: 'text' },
             { key: 'latency', label: 'Edge Latency', type: 'range', min: 0, max: 500, step: 10, unit: 'ms' },
             { key: 'failureRate', label: 'Miss Rate', type: 'range', min: 0, max: 100, step: 1, unit: '%' },
+        ],
+        server: [
+            { key: 'label', label: 'Label', type: 'text' },
+            { key: 'latency', label: 'Processing Latency', type: 'range', min: 0, max: 2000, step: 50, unit: 'ms', helpText: 'Time taken to execute request' },
+            { key: 'failureRate', label: 'Failure Rate', type: 'range', min: 0, max: 100, step: 1, unit: '%' },
+            { key: 'capacity', label: 'Concurrency Limit', type: 'number', min: 1, max: 1000, helpText: 'Max concurrent connections' },
+        ],
+        serverless: [
+            { key: 'label', label: 'Label', type: 'text' },
+            { key: 'latency', label: 'Cold Start / Run Time', type: 'range', min: 0, max: 4000, step: 100, unit: 'ms', helpText: 'Execution time + potential cold start' },
+            { key: 'failureRate', label: 'Timeout Rate', type: 'range', min: 0, max: 100, step: 1, unit: '%' },
+        ],
+        broker: [
+            { key: 'label', label: 'Label', type: 'text' },
+            { key: 'capacity', label: 'Buffer Size', type: 'number', min: 10, max: 10000, helpText: 'Queue and partition message limit' },
+            { key: 'latency', label: 'Replication Latency', type: 'range', min: 0, max: 1000, step: 50, unit: 'ms', helpText: 'Handoff/ACK latency' },
+        ],
+        firewall: [
+            { key: 'label', label: 'Label', type: 'text' },
+            { key: 'latency', label: 'Inspection Latency', type: 'range', min: 0, max: 500, step: 5, unit: 'ms', helpText: 'Packet scanning and inspection overhead' },
+            { key: 'failureRate', label: 'Block Rate', type: 'range', min: 0, max: 100, step: 1, unit: '%', helpText: 'Percentage of requests blocked' },
         ],
         default: [
             { key: 'label', label: 'Label', type: 'text' },
@@ -152,6 +174,21 @@ export function NodePropertiesPanel({ node, onClose, onUpdate }: NodePropertiesP
                     </div>
                 ))}
             </div>
+
+            {onDelete && (
+                <div className="px-4 pb-4 flex-shrink-0">
+                    <button
+                        onClick={() => {
+                            if (window.confirm('Are you sure you want to delete this component?')) {
+                                onDelete(node.id);
+                            }
+                        }}
+                        className="w-full py-2 bg-red-650 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shadow"
+                    >
+                        Delete Component
+                    </button>
+                </div>
+            )}
 
             <div className="p-3 bg-gray-50 border-t border-gray-200 rounded-b-lg flex-shrink-0">
                 <p className="text-[10px] text-gray-500 text-center">
