@@ -44,6 +44,28 @@ const EXPERIMENT_CONFIG: Record<string, {
                 tip: 'How fast the client sends requests over the network.',
                 consequence: (v) => v === 0 ? 'Instant (fibre / localhost)' : v < 100 ? 'Fast (LAN / WiFi)' : v < 500 ? 'Average (4G mobile)' : 'Slow (3G / poor connection)',
             },
+            {
+                key: 'traffic',
+                label: 'Generated Traffic (RPS)',
+                emoji: '🚦',
+                unit: ' rps',
+                min: 1,
+                max: 25,
+                step: 1,
+                tip: 'How many requests this client generates per second. Higher traffic tests server limit.',
+                consequence: (v) => v <= 3 ? 'Low traffic — Easy load' : v <= 10 ? 'Medium traffic — Moderate load' : v <= 18 ? 'High traffic — Heavy load' : 'Heavy traffic — Risk of overload!',
+            },
+            {
+                key: 'capacity',
+                label: 'Request Limit',
+                emoji: '⚡',
+                unit: ' rps',
+                min: 1,
+                max: 100,
+                step: 5,
+                tip: 'Maximum concurrent requests that can be outstanding.',
+                consequence: (v) => `Max ${v} concurrent queries outstanding`,
+            }
         ],
     },
     api: {
@@ -104,6 +126,17 @@ const EXPERIMENT_CONFIG: Record<string, {
                 tip: 'Simulates dropped database connections. Watch the whole system fail!',
                 consequence: (v) => v === 0 ? 'Healthy connection pool' : v < 10 ? 'Occasional timeouts' : v < 50 ? 'Connection pool exhausted' : '💀 Database is unreachable',
             },
+            {
+                key: 'capacity',
+                label: 'Max Connections',
+                emoji: '👥',
+                unit: ' connections',
+                min: 1,
+                max: 20,
+                step: 1,
+                tip: 'Maximum concurrent queries the database can handle before degrading performance or rejecting connections.',
+                consequence: (v) => `Pool size limit: ${v} concurrent connection slots`,
+            }
         ],
     },
     cache: {
@@ -202,6 +235,17 @@ const EXPERIMENT_CONFIG: Record<string, {
                 tip: 'Simulate server hardware failures or application crashes.',
                 consequence: (v) => v === 0 ? 'All requests succeed' : v < 5 ? 'Rare failures' : v < 50 ? 'Degraded performance' : '🔥 Server is failing!',
             },
+            {
+                key: 'capacity',
+                label: 'Concurrency Limit',
+                emoji: '👥',
+                unit: ' threads',
+                min: 1,
+                max: 20,
+                step: 1,
+                tip: 'Maximum concurrent threads/requests the server can handle before degrading or queue overflowing.',
+                consequence: (v) => `Server thread limit: ${v} simultaneous request capacity`,
+            }
         ],
     },
     serverless: {
@@ -329,6 +373,17 @@ function getConsequenceColor(key: keyof NodeProperties, value: number): string {
         if (value < 5) return 'text-yellow-400';
         if (value < 30) return 'text-orange-400';
         return 'text-red-400';
+    }
+    if (key === 'traffic') {
+        if (value <= 3) return 'text-emerald-400';
+        if (value <= 10) return 'text-teal-400';
+        if (value <= 18) return 'text-yellow-400';
+        return 'text-red-400';
+    }
+    if (key === 'capacity') {
+        if (value >= 12) return 'text-emerald-400';
+        if (value >= 6) return 'text-teal-400';
+        return 'text-yellow-400';
     }
     return 'text-slate-400';
 }
@@ -496,6 +551,42 @@ export function StudentExperimentPanel({ node, onClose, onUpdate }: StudentExper
 
                             {/* Quick presets */}
                             <div className="flex gap-1.5 flex-wrap">
+                                {exp.key === 'traffic' && [
+                                    { label: 'Low', val: 2 },
+                                    { label: 'Medium', val: 8 },
+                                    { label: 'High', val: 15 },
+                                    { label: 'Heavy', val: 25 },
+                                ].map(preset => (
+                                    <button
+                                        key={preset.label}
+                                        onClick={() => handleUpdate(exp.key, preset.val)}
+                                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors
+                                            ${currentValue === preset.val
+                                                ? 'bg-blue-500/20 border-blue-500/50 text-blue-300'
+                                                : 'bg-slate-800/80 border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600'
+                                            }`}
+                                    >
+                                        {preset.label}
+                                    </button>
+                                ))}
+                                {exp.key === 'capacity' && [
+                                    { label: 'Low', val: 2 },
+                                    { label: 'Medium', val: 6 },
+                                    { label: 'High', val: 12 },
+                                    { label: 'Max', val: 20 },
+                                ].map(preset => (
+                                    <button
+                                        key={preset.label}
+                                        onClick={() => handleUpdate(exp.key, preset.val)}
+                                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors
+                                            ${currentValue === preset.val
+                                                ? 'bg-teal-500/20 border-teal-500/50 text-teal-300'
+                                                : 'bg-slate-800/80 border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600'
+                                            }`}
+                                    >
+                                        {preset.label}
+                                    </button>
+                                ))}
                                 {exp.key === 'latency' && [
                                     { label: '0ms', val: 0 },
                                     { label: '100ms', val: 100 },

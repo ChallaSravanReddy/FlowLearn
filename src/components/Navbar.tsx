@@ -30,6 +30,7 @@ export function Navbar() {
             <div className="flex items-center gap-1 bg-white/[0.04] border border-white/[0.07] rounded-2xl px-1.5 py-1">
                 <NavLink to="/" active={isActive('/') && location.pathname === '/'} icon={<Layers size={14} />} label="Home" />
                 <NavLink to="/student" active={isActive('/student')} icon={<BookOpen size={14} />} label="Learn catalog" />
+                <NavLink to="/scaling" active={isActive('/scaling')} icon={<Network size={14} />} label="Scaling Sim" />
             </div>
 
             {/* Right Actions */}

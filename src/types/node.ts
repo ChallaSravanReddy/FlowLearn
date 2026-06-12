@@ -5,6 +5,7 @@ export interface NodeProperties {
     failureRate?: number; // percentage 0-100
     capacity?: number; // max concurrent requests
     sampleRate?: number; // percentage 0-100 forwarded
+    traffic?: number; // requests per second generated
     label: string;
     type: string;
     state?: NodeState;

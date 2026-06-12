@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import ReactFlow, { Background, Controls, ReactFlowProvider, useNodesState, useEdgesState, addEdge, type Connection, type Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -7,7 +7,7 @@ import { ControlPanel } from '../features/player/ControlPanel';
 import { useFlowExecution } from '../features/player/useFlowExecution';
 import { PacketLayer } from '../features/player/PacketLayer';
 import { VideoPlayer } from '../features/player/VideoPlayer';
-import { ArrowLeft, Video as VideoIcon, Sparkles, MousePointerClick } from 'lucide-react';
+import { ArrowLeft, Video as VideoIcon, Sparkles, MousePointerClick, GripHorizontal, X } from 'lucide-react';
 import { useExecutionStore } from '../store/executionStore';
 import { supabase } from '../lib/supabaseClient';
 import { StudentExperimentPanel } from '../features/player/StudentExperimentPanel';
@@ -34,6 +34,134 @@ function CoursePlayerContent() {
     // Video Player State
     const [showVideo, setShowVideo] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
+
+    // Draggable Video Player State
+    const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStart = useRef({ x: 0, y: 0 });
+    const positionStart = useRef({ x: 0, y: 0 });
+
+    // Initialize position on mount/load
+    useEffect(() => {
+        if (showVideo && !position) {
+            const parent = document.getElementById('player-container');
+            if (parent) {
+                const parentRect = parent.getBoundingClientRect();
+                const initialX = parentRect.width - 480 - 16;
+                const initialY = 16;
+                setPosition({ x: initialX, y: initialY });
+            }
+        }
+    }, [showVideo, position]);
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if (e.button !== 0) return; // Only drag with left click
+        setIsDragging(true);
+        dragStart.current = { x: e.clientX, y: e.clientY };
+        positionStart.current = position || { x: window.innerWidth - 480 - 16, y: 16 };
+        e.preventDefault();
+    };
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if (e.touches.length !== 1) return;
+        setIsDragging(true);
+        dragStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        positionStart.current = position || { x: window.innerWidth - 480 - 16, y: 16 };
+    };
+
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const parent = document.getElementById('player-container');
+            const player = document.getElementById('draggable-video-container');
+            if (!parent || !player) return;
+
+            const parentRect = parent.getBoundingClientRect();
+            const playerRect = player.getBoundingClientRect();
+
+            const dx = e.clientX - dragStart.current.x;
+            const dy = e.clientY - dragStart.current.y;
+
+            let newX = positionStart.current.x + dx;
+            let newY = positionStart.current.y + dy;
+
+            // Clamp bounds
+            const maxX = parentRect.width - playerRect.width;
+            const maxY = parentRect.height - playerRect.height;
+
+            newX = Math.max(0, Math.min(newX, maxX));
+            newY = Math.max(0, Math.min(newY, maxY));
+
+            setPosition({ x: newX, y: newY });
+        };
+
+        const handleTouchMove = (e: TouchEvent) => {
+            if (e.touches.length !== 1) return;
+            const parent = document.getElementById('player-container');
+            const player = document.getElementById('draggable-video-container');
+            if (!parent || !player) return;
+
+            const parentRect = parent.getBoundingClientRect();
+            const playerRect = player.getBoundingClientRect();
+
+            const dx = e.touches[0].clientX - dragStart.current.x;
+            const dy = e.touches[0].clientY - dragStart.current.y;
+
+            let newX = positionStart.current.x + dx;
+            let newY = positionStart.current.y + dy;
+
+            const maxX = parentRect.width - playerRect.width;
+            const maxY = parentRect.height - playerRect.height;
+
+            newX = Math.max(0, Math.min(newX, maxX));
+            newY = Math.max(0, Math.min(newY, maxY));
+
+            setPosition({ x: newX, y: newY });
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        window.addEventListener('touchmove', handleTouchMove);
+        window.addEventListener('touchend', handleMouseUp);
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('touchmove', handleTouchMove);
+            window.removeEventListener('touchend', handleMouseUp);
+        };
+    }, [isDragging]);
+
+    // Resize Handler
+    useEffect(() => {
+        const handleResize = () => {
+            if (!position) return;
+            const parent = document.getElementById('player-container');
+            const player = document.getElementById('draggable-video-container');
+            if (!parent || !player) return;
+
+            const parentRect = parent.getBoundingClientRect();
+            const playerRect = player.getBoundingClientRect();
+
+            setPosition(prev => {
+                if (!prev) return null;
+                const maxX = parentRect.width - playerRect.width;
+                const maxY = parentRect.height - playerRect.height;
+                return {
+                    x: Math.max(0, Math.min(prev.x, maxX)),
+                    y: Math.max(0, Math.min(prev.y, maxY))
+                };
+            });
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [position]);
 
     // Initialize execution engine
     useFlowExecution();
@@ -253,7 +381,7 @@ function CoursePlayerContent() {
                 </div>
             </div>
 
-            <div className="flex-1 flex overflow-hidden relative">
+            <div className="flex-1 flex overflow-hidden relative" id="player-container">
                 {/* Main Canvas */}
                 <div className="flex-1 h-full relative">
                     <ReactFlow
@@ -279,14 +407,37 @@ function CoursePlayerContent() {
 
                 {/* Video Player Overlay */}
                 {showVideo && hasMedia && (
-                    <div className="absolute top-4 right-4 w-[480px] z-20">
+                    <div
+                        id="draggable-video-container"
+                        className="absolute z-20 w-[480px] rounded-2xl border border-slate-800 bg-slate-950/80 backdrop-blur-md shadow-2xl flex flex-col overflow-hidden transition-shadow duration-200"
+                        style={position ? { left: `${position.x}px`, top: `${position.y}px` } : { top: '16px', right: '16px' }}
+                    >
+                        {/* Drag Handle Header */}
+                        <div
+                            onMouseDown={handleMouseDown}
+                            onTouchStart={handleTouchStart}
+                            className="h-10 px-4 flex items-center justify-between border-b border-slate-800/80 bg-slate-900/60 cursor-grab active:cursor-grabbing select-none"
+                        >
+                            <div className="flex items-center gap-2 text-slate-400">
+                                <GripHorizontal size={16} className="text-slate-500" />
+                                <span className="text-xs font-semibold text-slate-300">Walkthrough Lesson</span>
+                            </div>
+                            <button
+                                onClick={() => setShowVideo(false)}
+                                className="p-1 hover:bg-slate-800/80 rounded text-slate-400 hover:text-white transition-colors"
+                            >
+                                <X size={14} />
+                            </button>
+                        </div>
+
+                        {/* Video Player */}
                         <VideoPlayer
                             videoUrl={flow.media?.video?.url}
                             audioUrl={flow.media?.audio?.url}
                             duration={flow.media?.totalDuration || 0}
                             onTimeUpdate={handleTimeUpdate}
                             onPlayStateChange={handlePlayStateChange}
-                            className="shadow-2xl border border-slate-800 rounded-2xl overflow-hidden"
+                            className="aspect-video w-full rounded-t-none rounded-b-2xl shadow-none border-none"
                         />
                     </div>
                 )}

@@ -68,15 +68,19 @@ export function useFlowExecution() {
             const edges = getEdges();
 
             // 1. Spawning Logic
-            // If we have simulationEvents, we should drive spawning from there.
-            // For now, maintain autonomous as fallback.
-            const hasAutonomousSimulation = true;
+            const clientNodes = nodes.filter(n => n.type === 'client');
+            const targetClient = clientNodes[0]; // pick first client for main stream
+            const rps = targetClient?.data.traffic ?? 2; // requests per second (default 2)
+            const spawnInterval = 1000 / rps;
+            const elapsed = now - lastSpawnTime.current;
 
-            if (hasAutonomousSimulation && (packets.length === 0 || (Math.random() < 0.05 && packets.length < 5))) {
-                if (now - lastSpawnTime.current > 1000) {
+            if (elapsed >= spawnInterval) {
+                // Determine how many requests we should spawn to meet the RPS
+                const spawnCount = Math.min(5, Math.ceil(elapsed / spawnInterval));
+                for (let i = 0; i < spawnCount; i++) {
                     spawnRequest();
-                    lastSpawnTime.current = now;
                 }
+                lastSpawnTime.current = now;
             }
 
             // Clean up triggered events if it gets too large
@@ -106,23 +110,34 @@ export function useFlowExecution() {
                             if (!targetNode) return { ...packet, status: 'failed' };
 
                             // Determine properties
-                            const failureRate = targetNode.data.failureRate || 0;
+                            const baseFailureRate = targetNode.data.failureRate || 0;
                             const capacity = targetNode.data.capacity || 10;
 
                             // Calculate current load on this node
                             const currentLoad = packets.filter(p => p.nodeId === targetNode.id && p.status === 'processing').length;
+                            const loadRatio = currentLoad / capacity;
 
-                            // Check Capacity
-                            if (currentLoad >= capacity) {
-                                addLog(`Capacity exceeded at ${targetNode.data.label} (${currentLoad}/${capacity})`, 'error');
+                            // Check Capacity Overload
+                            if (loadRatio >= 1.0) {
+                                addLog(`Capacity limit exceeded at ${targetNode.data.label} (${currentLoad}/${capacity}) - Request Dropped!`, 'error');
                                 // Briefly flash the node as active/error
                                 updateNodeState(targetNode.id, { active: true, processingCount: currentLoad });
                                 setTimeout(() => updateNodeState(targetNode.id, { active: false }), 200);
                                 return { ...packet, status: 'failed', progress: 100 };
                             }
 
-                            // Check Failure Rate
-                            if (Math.random() * 100 < failureRate) {
+                            // Dynamic performance degradation under heavy traffic
+                            let latencyMultiplier = 1;
+                            let extraFailureRate = 0;
+                            if (loadRatio >= 0.8) {
+                                latencyMultiplier = 1 + (loadRatio - 0.7) * 4; // e.g. 1.8x latency at 90% load
+                                extraFailureRate = (loadRatio - 0.7) * 50; // e.g. +10% failure chance at 90% load
+                                addLog(`WARNING: Heavy traffic at ${targetNode.data.label} (${Math.round(loadRatio * 100)}% load) - Performance degraded.`, 'error');
+                            }
+
+                            // Check Failure Rate (including extra overload failure chance)
+                            const totalFailureRate = baseFailureRate + extraFailureRate;
+                            if (Math.random() * 100 < totalFailureRate) {
                                 addLog(`Request failed at ${targetNode.data.label}`, 'error');
                                 updateNodeState(targetNode.id, { active: true, processingCount: currentLoad });
                                 setTimeout(() => updateNodeState(targetNode.id, { active: false }), 200);
@@ -132,13 +147,16 @@ export function useFlowExecution() {
                             // Update Node State (Active)
                             updateNodeState(targetNode.id, { active: true, processingCount: currentLoad + 1 });
 
+                            // Calculate degraded latency
+                            const targetLatency = targetNode.data.latency || 500;
+                            const processingDuration = Math.round(targetLatency * latencyMultiplier);
+
                             return {
                                 ...packet,
                                 status: 'processing',
                                 nodeId: targetNode.id,
                                 progress: 0,
-                                // Calculate processing duration from target node's processing latency (default to 500ms)
-                                processingTimeRemaining: targetNode.data.latency || 500,
+                                processingTimeRemaining: processingDuration,
                                 edgeId: undefined,
                                 pathStack: [...packet.pathStack, targetNode.id]
                             } as Packet;

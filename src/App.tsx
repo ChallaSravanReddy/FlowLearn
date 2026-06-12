@@ -4,6 +4,7 @@ import { HomePage } from './pages/HomePage';
 import { BuilderPage } from './pages/BuilderPage';
 import { StudentPage } from './pages/StudentPage';
 import { CoursePlayerPage } from './pages/CoursePlayerPage';
+import { ScalingPage } from './pages/ScalingPage';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           <Route path="builder" element={<BuilderPage />} />
           <Route path="student" element={<StudentPage />} />
           <Route path="student/course/:id" element={<CoursePlayerPage />} />
+          <Route path="scaling" element={<ScalingPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

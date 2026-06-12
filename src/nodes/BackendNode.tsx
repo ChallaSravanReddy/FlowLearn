@@ -406,23 +406,32 @@ export const BackendNode = memo(({ id, data, selected }: NodeProps<NodePropertie
                 return <ServiceFigure active={isActive} />;
         }
     };
+    const loadRatio = data.capacity && data.capacity > 0 ? (processingCount / data.capacity) : 0;
+    const isOverloaded = loadRatio >= 0.8;
 
     return (
         <div className={`
             relative flex flex-col items-center text-center group transition-all duration-300 w-[140px] select-none
             ${selected ? 'scale-[1.03]' : ''}
-            ${isActive ? 'scale-[1.03]' : ''}
+            ${isActive || isOverloaded ? 'scale-[1.03]' : ''}
         `}>
             {/* Symbol Base Circle */}
             <div className={`
                 relative w-20 h-20 rounded-full border-2 backdrop-blur-md flex items-center justify-center transition-all duration-300
-                ${colorClass}
+                ${isOverloaded 
+                    ? 'border-red-500 bg-red-950/60 text-red-350 shadow-[0_0_25px_rgba(239,68,68,0.7)] animate-[pulse_1.5s_infinite]' 
+                    : colorClass}
                 ${selected ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900 border-indigo-400' : ''}
-                ${isActive ? 'shadow-[0_0_20px_rgba(99,102,241,0.6)] border-indigo-400' : ''}
+                ${isActive && !isOverloaded ? 'shadow-[0_0_20px_rgba(99,102,241,0.6)] border-indigo-400' : ''}
             `}>
                 {/* Active Glow Effect */}
-                {isActive && (
+                {isActive && !isOverloaded && (
                     <div className="absolute inset-0 rounded-full animate-pulse bg-indigo-500/10 pointer-events-none" />
+                )}
+
+                {/* Overloaded Glow Effect */}
+                {isOverloaded && (
+                    <div className="absolute inset-0 rounded-full animate-pulse bg-red-500/20 pointer-events-none" />
                 )}
 
                 {/* Left handle for incoming connections */}
@@ -431,7 +440,7 @@ export const BackendNode = memo(({ id, data, selected }: NodeProps<NodePropertie
                         type="target"
                         position={Position.Left}
                         style={{ left: '-6px', top: '50%', transform: 'translateY(-50%)' }}
-                        className="w-3 h-3 bg-indigo-505 bg-indigo-500 border-2 border-slate-950 rounded-full hover:bg-indigo-400 transition-colors"
+                        className="w-3 h-3 bg-indigo-500 border-2 border-slate-955 border-slate-950 rounded-full hover:bg-indigo-400 transition-colors"
                     />
                 )}
 
@@ -452,13 +461,22 @@ export const BackendNode = memo(({ id, data, selected }: NodeProps<NodePropertie
                     </div>
                 )}
 
+                {/* Overloaded Warning Badge */}
+                {isOverloaded && (
+                    <div className="absolute -top-1.5 -left-1.5 flex items-center justify-center animate-bounce">
+                        <span className="relative inline-flex rounded-full h-5 w-5 bg-red-600 border border-red-400 text-[10px] text-white font-extrabold items-center justify-center shadow-lg animate-pulse" title={`Overloaded: ${Math.round(loadRatio * 100)}% load`}>
+                            ⚠️
+                        </span>
+                    </div>
+                )}
+
                 {/* Right handle for outgoing connections */}
                 {!['database', 'cache', 'storage', 'search', 'notification'].includes(typeKey) && (
                     <Handle
                         type="source"
                         position={Position.Right}
                         style={{ right: '-6px', top: '50%', transform: 'translateY(-50%)' }}
-                        className="w-3 h-3 bg-indigo-500 border-2 border-slate-955 border-slate-950 rounded-full hover:bg-indigo-400 transition-colors"
+                        className="w-3 h-3 bg-indigo-500 border-2 border-slate-950 rounded-full hover:bg-indigo-400 transition-colors"
                     />
                 )}
             </div>
@@ -471,6 +489,12 @@ export const BackendNode = memo(({ id, data, selected }: NodeProps<NodePropertie
                 <div className="text-[9px] text-indigo-300 uppercase tracking-widest font-extrabold mt-0.5 opacity-85">
                     {typeLabel}
                 </div>
+
+                {isOverloaded && (
+                    <div className="text-[8px] bg-red-500/20 border border-red-500/50 px-2 py-0.5 rounded-full text-red-300 font-bold tracking-wider mt-1 uppercase animate-pulse">
+                        🔥 Overloaded ({Math.round(loadRatio * 100)}%)
+                    </div>
+                )}
 
                 {/* Parameters overlay mini stats */}
                 <div className="flex justify-center gap-1 mt-1.5 flex-wrap max-w-full">
@@ -486,10 +510,16 @@ export const BackendNode = memo(({ id, data, selected }: NodeProps<NodePropertie
                             {data.failureRate}%
                         </div>
                     )}
-                    {data.capacity !== undefined && (
+                    {typeKey === 'client' && data.traffic !== undefined && (
+                        <div className="flex items-center gap-0.5 text-[8px] bg-blue-950/80 border border-blue-900/40 px-1.5 py-0.5 rounded-full text-blue-300 font-mono">
+                            <span className="text-[10px]">🚦</span>
+                            {data.traffic} rps
+                        </div>
+                    )}
+                    {data.capacity !== undefined && typeKey !== 'client' && (
                         <div className="flex items-center gap-0.5 text-[8px] bg-slate-950/80 border border-slate-800/80 px-1.5 py-0.5 rounded-full text-slate-300 font-mono">
                             <Cpu size={8} className="text-blue-400" />
-                            {data.capacity} rps
+                            {data.capacity} {typeKey === 'database' ? 'conn' : 'threads'}
                         </div>
                     )}
                 </div>
@@ -499,4 +529,3 @@ export const BackendNode = memo(({ id, data, selected }: NodeProps<NodePropertie
 });
 
 BackendNode.displayName = 'BackendNode';
-

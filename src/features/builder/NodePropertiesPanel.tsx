@@ -23,6 +23,7 @@ export function NodePropertiesPanel({ node, onClose, onUpdate, onDelete }: NodeP
         client: [
             { key: 'label', label: 'Label', type: 'text' },
             { key: 'latency', label: 'Network Latency', type: 'range', min: 0, max: 2000, step: 50, unit: 'ms', helpText: 'Time to send request to next hop' },
+            { key: 'traffic', label: 'Traffic Generated (RPS)', type: 'range', min: 1, max: 25, step: 1, unit: ' rps', helpText: 'Requests generated per second' },
             { key: 'capacity', label: 'Request Limit', type: 'number', min: 1, max: 1000, helpText: 'Max concurrent outgoing requests' },
         ],
         api: [

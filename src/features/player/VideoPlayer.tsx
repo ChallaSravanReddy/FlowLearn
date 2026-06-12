@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Settings, SkipBack, SkipForward } from 'lucide-react';
 import { formatDuration } from '../../utils/mediaUpload';
 import { useExecutionStore } from '../../store/executionStore';
+import { cn } from '../../lib/utils';
 
 interface VideoPlayerProps {
     videoUrl?: string;
@@ -188,7 +189,7 @@ export function VideoPlayer({
     return (
         <div
             ref={containerRef}
-            className={`relative bg-black rounded-lg overflow-hidden shadow-2xl aspect-video ${className}`}
+            className={cn("relative bg-black rounded-lg overflow-hidden shadow-2xl aspect-video", className)}
             onMouseMove={resetControlsTimeout}
             onMouseLeave={() => isRunning && setShowControls(false)}
         >
