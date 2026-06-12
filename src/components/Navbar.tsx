@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Network, BookOpen, Layers, Sparkles, GraduationCap } from 'lucide-react';
+import { Network, BookOpen, Layers, Sparkles, GraduationCap, Database } from 'lucide-react';
 
 export function Navbar() {
     const location = useLocation();
@@ -31,6 +31,7 @@ export function Navbar() {
                 <NavLink to="/" active={isActive('/') && location.pathname === '/'} icon={<Layers size={14} />} label="Home" />
                 <NavLink to="/student" active={isActive('/student')} icon={<BookOpen size={14} />} label="Learn catalog" />
                 <NavLink to="/scaling" active={isActive('/scaling')} icon={<Network size={14} />} label="Scaling Sim" />
+                <NavLink to="/replication" active={isActive('/replication')} icon={<Database size={14} />} label="Replication Sim" />
             </div>
 
             {/* Right Actions */}
